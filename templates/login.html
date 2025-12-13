@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login - Accountant Portal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; background: #e0f2f1; }
+        .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 300px; text-align: center; }
+        
+        /* Updated Styling to match Register Page */
+        input[type="text"], input[type="password"] { width: 100%; padding: 10px; margin-bottom: 15px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px; }
+        button { width: 100%; padding: 10px; background-color: #009578; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #00796b; }
+        
+        /* Checkbox styling */
+        .show-pass-container { display: flex; align-items: center; margin-bottom: 15px; font-size: 14px; color: #555; }
+        .show-pass-container input { width: auto; margin: 0 8px 0 0; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2 style="color: #009578;">🔐 Login</h2>
+        
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <p style="color:red; background-color: #ffebee; padding: 10px; border-radius: 5px; font-size: 14px;">{{ messages[0] }}</p>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="/login">
+            <input type="text" name="username" placeholder="Username" required autocomplete="username">
+            
+            <input type="password" name="password" id="loginPass" placeholder="Password" required autocomplete="current-password">
+            
+            <div class="show-pass-container">
+                <input type="checkbox" onclick="toggleLoginPassword()"> Show Password
+            </div>
+
+            <div style="text-align: right; margin-bottom: 10px;">
+    <a href="/forgot_password" style="font-size: 12px; color: #d32f2f;">Forgot Password?</a>
+</div>
+
+            <button type="submit">Login</button>
+        </form>
+
+        <p style="margin-top:20px"><small>New here? <a href="/register" style="color: #009578; text-decoration: none;">Create Account</a></small></p>
+    </div>
+
+    <script>
+        function toggleLoginPassword() {
+            var x = document.getElementById("loginPass");
+            if (x.type === "password") {
+                x.type = "text";
+            } else {
+                x.type = "password";
+            }
+        }
+    </script>
+</body>
+</html>

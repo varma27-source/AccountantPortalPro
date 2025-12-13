@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Search Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* INLINE STYLES FOR SEARCH PAGE */
+        body { font-family: Arial, sans-serif; background-color: #f3f7fa; margin: 20px; }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+        
+        table {
+            width: 95%; margin: 0 auto 40px auto; border-collapse: collapse;
+            background-color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px; overflow: hidden;
+        }
+        th, td { padding: 12px 15px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #009578; color: white; } /* Updated color to match Index */
+        
+        /* Row Colors */
+        .row-expense { background-color: #fee2e2 !important; color: #991b1b; }
+        .row-expense td { border-bottom: 1px solid #fecaca; }
+        .row-income { background-color: #d1fae5 !important; color: #065f46; }
+        .row-income td { border-bottom: 1px solid #a7f3d0; }
+
+        /* Badges */
+        .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; display: inline-block; }
+        .verified { background-color: #d1fae5; color: #065f46; }
+        .review { background-color: #fef3c7; color: #92400e; }
+        
+        .badge-tax {
+            background-color: #e0f7fa; color: #006064; padding: 4px 8px;
+            border-radius: 12px; font-size: 0.85em; font-weight: bold; display: inline-block;
+        }
+
+        /* Back Button */
+        .back-link {
+            display: block; text-align: center; margin-top: 20px;
+            font-size: 18px; color: #009578; text-decoration: none; font-weight: bold;
+        }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Search Results</h1>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Category</th>
+                <th>Tax Relief</th> <th>Receipt</th>    <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if transactions %}
+                {% for t in transactions %}
+                <tr class="{{ 'row-income' if t.type == 'Credit' else 'row-expense' }}">
+                    
+                    <td>{{ t.date }}</td> 
+                    
+                    <td>{{ t.description }}</td>
+                    
+                    <td>
+                        {% if t.type == 'Credit' %} + {% else %} - {% endif %}
+                        RM {{ t.amount }}
+                    </td>
+                    
+                    <td>{{ t.category }}</td>
+
+                    <td>
+                        {% if t.tax_category != 'None' %}
+                            <span class="badge-tax">🏛 {{ t.tax_category }}</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if t.receipt_path %}
+                            <span style="color:green; font-weight:bold;">View</span>
+                        {% else %}
+                            <span style="color:#ccc;">-</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if 'Verified' in t.status %}
+                            <span class="status-badge verified">✓ Verified</span>
+                        {% else %}
+                            <span class="status-badge review">⚠ Review</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 20px;">
+                        No transactions found matching your search.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('index') }}" class="back-link">&larr; Back to Dashboard</a>
+</body>
+</html>

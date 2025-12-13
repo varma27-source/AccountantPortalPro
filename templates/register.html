@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Register - Accountant Portal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; background: #e0f2f1; }
+        /* Increased width slightly to fit the long question text */
+        .login-box { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 350px; text-align: center; }
+        
+        input[type="text"], input[type="password"], select { width: 100%; padding: 10px; margin-bottom: 15px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px; }
+        button { width: 100%; padding: 10px; background-color: #009578; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #00796b; }
+        
+        /* Checkbox styling */
+        .show-pass-container { display: flex; align-items: center; margin-bottom: 15px; font-size: 14px; color: #555; }
+        .show-pass-container input { width: auto; margin: 0 8px 0 0; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2 style="color: #009578;">📝 Register</h2>
+        
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <p style="color:red; background-color: #ffebee; padding: 10px; border-radius: 5px; font-size: 14px;">{{ messages[0] }}</p>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="/register">
+            <input type="text" name="username" placeholder="Choose a Username" required autocomplete="username">
+            
+            <input type="password" name="password" id="pass1" placeholder="Choose a Password" required autocomplete="new-password">
+            
+            <input type="password" name="confirm_password" id="pass2" placeholder="Repeat Password" required autocomplete="new-password">
+            
+            <select name="security_question" required>
+                <option value="" disabled selected>Select a Security Question...</option>
+                <option value="pet">What is the name of your first pet?</option>
+                <option value="school">What secondary school did you attend?</option>
+                <option value="city">In what city were you born?</option>
+                <option value="mother">What is your mother's maiden name?</option>
+            </select>
+            
+            <input type="text" name="security_answer" placeholder="Answer to Security Question" required>
+
+            <div class="show-pass-container">
+                <input type="checkbox" onclick="togglePassword()"> Show Password
+            </div>
+
+            <button type="submit">Create Account</button>
+        </form>
+
+        <p style="margin-top:20px"><small>Already have an account? <a href="/login" style="color: #009578; text-decoration: none;">Login</a></small></p>
+    </div>
+
+    <script>
+        function togglePassword() {
+            var x = document.getElementById("pass1");
+            var y = document.getElementById("pass2");
+            if (x.type === "password") {
+                x.type = "text";
+                y.type = "text";
+            } else {
+                x.type = "password";
+                y.type = "password";
+            }
+        }
+    </script>
+</body>
+</html> 

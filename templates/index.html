@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Accountant Portal Pro</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body { background-color: #f8f9fa; }
+        
+        /* Custom Drop Zone Style */
+        .drop-zone {
+            border: 2px dashed #0d6efd; background: #f1f7ff; color: #0d6efd;
+            padding: 30px; text-align: center; border-radius: 10px; cursor: pointer;
+            transition: all 0.3s;
+        }
+        .drop-zone:hover { background: #e2efff; transform: scale(1.02); }
+        
+        /* Floating Action Bar (Hidden by default) */
+        #bulkActionBar {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: #212529; color: white; padding: 15px 30px; border-radius: 50px;
+            display: none; box-shadow: 0 10px 20px rgba(0,0,0,0.3); z-index: 1000; align-items: center;
+        }
+
+        /* Chat Widget Styling */
+        .chat-widget {
+            position: fixed; bottom: 20px; right: 20px; width: 320px;
+            background: white; border: 1px solid #ccc; border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-family: sans-serif;
+            transition: all 0.3s ease; z-index: 9999;
+        }
+        .chat-widget.minimized { height: 50px; overflow: hidden; }
+        .chat-header {
+            background: #0d6efd; color: white; padding: 15px; cursor: pointer;
+            font-weight: bold; display: flex; justify-content: space-between;
+        }
+        .chat-body { height: 250px; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; background: #f9f9f9; }
+        .chat-input-area { padding: 10px; border-top: 1px solid #ddd; display: flex; background: white; }
+        .chat-input-area input { flex: 1; padding: 8px; border-radius: 20px; border: 1px solid #ddd; outline: none; }
+        .chat-input-area button { background: #0d6efd; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; margin-left: 5px; cursor: pointer; }
+        .message { padding: 8px 12px; border-radius: 15px; font-size: 13px; max-width: 85%; }
+        .bot-msg { background: #e0e0e0; align-self: flex-start; border-bottom-left-radius: 0; }
+        .user-msg { background: #0d6efd; color: white; align-self: flex-end; border-bottom-right-radius: 0; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow">
+    <div class="container">
+    <a class="navbar-brand fw-bold" href="#">📊 AccountantPortal</a>
+    <div class="d-flex align-items-center">
+        <a href="{{ url_for('settings') }}" class="btn btn-outline-light btn-sm me-3">⚙️ Settings</a>
+        
+        <span class="text-white me-3">User: {{ user.username }}</span>
+        <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+    </div>
+</div>
+</nav>
+
+<div class="container">
+    
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100 p-4 border-0">
+                <h5 class="text-muted mb-3">Financial Overview</h5>
+                <h1 class="display-4 fw-bold text-dark">RM {{ "{:,.2f}".format(balance) }}</h1>
+                
+                <div class="d-grid gap-2 mt-3">
+                    <button class="btn btn-warning fw-bold text-dark" onclick="document.getElementById('scanInput').click()">
+                        📸 AI Scan Receipt
+                    </button>
+                    <input type="file" id="scanInput" accept="image/*" style="display: none;" onchange="uploadScan()">
+                </div>
+
+                <div class="d-flex justify-content-between mt-2 mb-4">
+                    <span class="text-success fw-bold">▲ Income: RM {{ "{:,.2f}".format(income) }}</span>
+                    <span class="text-danger fw-bold">▼ Expense: RM {{ "{:,.2f}".format(expense) }}</span>
+                </div>
+
+                <div class="drop-zone" id="drop-zone">
+                    <h5>📂 Drag Bank Statement (PDF)</h5>
+                    <small class="text-muted">or click to upload</small>
+                    <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form" class="d-none">
+                        <input type="file" name="file" id="file-input" accept=".pdf">
+                    </form>
+                </div>
+
+                <div class="mt-4 d-flex gap-2">
+                    <a href="/export" class="btn btn-success flex-grow-1">📥 Export Excel</a>
+                    <a href="/archive_reset" class="btn btn-outline-danger" onclick="return confirm('Archive old data and Start Fresh?')">♻ Reset</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100 p-4 border-0 align-items-center justify-content-center">
+                <h5 class="mb-3">Expense Breakdown</h5>
+                <div style="height: 250px; width: 250px;">
+                    <canvas id="expenseChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="fw-bold">Transactions</h3>
+            <form action="/search" class="d-flex">
+                <input type="text" name="query" class="form-control me-2" placeholder="Search client or shop...">
+                <button class="btn btn-primary">Search</button>
+            </form>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th width="5%"><input type="checkbox" class="form-check-input" onclick="toggleAll(this)"></th>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                        <th>Category</th>
+                        <th>Tax Info</th>
+                        <th>Receipt</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in transactions %}
+                    <tr class="{{ 'table-success' if t.type == 'Credit' else '' }}">
+                        <td>
+                            <input type="checkbox" class="form-check-input txn-checkbox" 
+                                   data-desc="{{ t.date }} | {{ t.description }} | RM {{ t.amount }}">
+                        </td>
+                        <td>{{ t.date }}</td>
+                        <td>{{ t.description }}</td>
+                        <td class="{{ 'text-success' if t.type == 'Credit' else 'text-danger' }} fw-bold">
+                            {{ '+' if t.type == 'Credit' else '-' }} RM {{ "{:,.2f}".format(t.amount) }}
+                        </td>
+                        <td><span class="badge bg-secondary">{{ t.category }}</span></td>
+                        <td>
+                            {% if t.tax_category != 'None' %}
+                                <span class="badge bg-info text-dark">🏛 {{ t.tax_category }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if t.receipt_path %}
+                                <span class="text-success fw-bold">Stored</span>
+                            {% else %}
+                                <form action="/upload_receipt/{{ t.id }}" method="POST" enctype="multipart/form-data">
+                                    <input type="file" name="receipt" onchange="this.form.submit()" style="width: 80px; font-size: 10px;">
+                                </form>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if 'Verified' in t.status %}
+                                <span class="badge bg-success">Verified</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">Review</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="bulkActionBar">
+    <span id="selectedCount" class="me-3 fw-bold">0 selected</span>
+    <button class="btn btn-success me-2 rounded-pill" onclick="sendBulkWhatsApp()">WhatsApp Client</button>
+    <button class="btn btn-primary rounded-pill" onclick="sendBulkEmail()">Email Client</button>
+</div>
+
+<div class="chat-widget minimized" id="chatWidget">
+    <div class="chat-header" onclick="toggleChat()">
+        💬 Chat Assistant <span id="toggleIcon">▲</span>
+    </div>
+    <div class="chat-body" id="chatBody">
+        <div class="message bot-msg">Hello! Ask "Total spent on food" or "Show me Grab".</div>
+    </div>
+    <div class="chat-input-area">
+        <input type="text" id="chatInput" placeholder="Type here..." onkeypress="handleEnter(event)">
+        <button onclick="sendMessage()">➤</button>
+    </div>
+</div>
+
+<script>
+    // --- 1. CHART.JS LOGIC ---
+    // Reads the data sent from Python
+    const chartLabels = {{ chart_labels | safe }};
+    const chartValues = {{ chart_values | safe }};
+    
+    if(chartLabels.length > 0) {
+        const ctx = document.getElementById('expenseChart').getContext('2d');
+        new Chart(ctx, { 
+            type: 'doughnut', 
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    data: chartValues,
+                    backgroundColor: ['#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#dc3545', '#fd7e14', '#ffc107', '#198754', '#20c997', '#0dcaf0']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    // --- 2. BULK MESSAGING LOGIC ---
+    const checkboxes = document.querySelectorAll('.txn-checkbox');
+    const actionBar = document.getElementById('bulkActionBar');
+    const countSpan = document.getElementById('selectedCount');
+
+    checkboxes.forEach(box => box.addEventListener('change', updateActionBar));
+
+    function toggleAll(source) {
+        checkboxes.forEach(box => box.checked = source.checked);
+        updateActionBar();
+    }
+
+    function updateActionBar() {
+        const selected = document.querySelectorAll('.txn-checkbox:checked');
+        if (selected.length > 0) {
+            actionBar.style.display = "flex";
+            countSpan.innerText = selected.length + " items selected";
+        } else {
+            actionBar.style.display = "none";
+        }
+    }
+
+    function sendBulkWhatsApp() {
+        const selected = document.querySelectorAll('.txn-checkbox:checked');
+        let msg = "Hi, could you please clarify the following transactions?%0A%0A";
+        
+        selected.forEach((box, index) => {
+            // Extracts the REAL data from the row
+            msg += (index + 1) + ". " + box.getAttribute('data-desc') + "%0A";
+        });
+        
+        msg += "%0AThanks!";
+        window.open("https://wa.me/?text=" + msg, '_blank');
+    }
+
+    function sendBulkEmail() {
+        const selected = document.querySelectorAll('.txn-checkbox:checked');
+        let body = "Hi, could you please clarify the following transactions?%0D%0A%0D%0A";
+        
+        selected.forEach((box, index) => {
+            body += (index + 1) + ". " + box.getAttribute('data-desc') + "%0D%0A";
+        });
+        
+        body += "%0D%0AThanks!";
+        window.location.href = "mailto:?subject=Clarification Needed&body=" + body;
+    }
+
+    // --- 3. DRAG & DROP LOGIC ---
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("file-input");
+    const uploadForm = document.getElementById("upload-form");
+
+    dropZone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => { if (fileInput.files.length) uploadForm.submit(); });
+    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.style.background = "#e2efff"; });
+    ["dragleave", "dragend"].forEach(t => dropZone.addEventListener(t, () => dropZone.style.background = "#f1f7ff"));
+    dropZone.addEventListener("drop", (e) => { 
+        e.preventDefault(); 
+        if (e.dataTransfer.files.length) { 
+            fileInput.files = e.dataTransfer.files; 
+            uploadForm.submit(); 
+        } 
+    });
+
+    // --- 4. CHATBOT LOGIC ---
+    function toggleChat() {
+        const w = document.getElementById('chatWidget');
+        w.classList.toggle('minimized');
+        document.getElementById("toggleIcon").innerText = w.classList.contains('minimized') ? '▲' : '▼';
+    }
+    function handleEnter(e) { if (e.key === 'Enter') sendMessage(); }
+    function sendMessage() {
+        const input = document.getElementById("chatInput");
+        const text = input.value.trim();
+        if (!text) return;
+        addMsg(text, 'user-msg');
+        input.value = '';
+        fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text })
+        }).then(r => r.json()).then(data => addMsg(data.response, 'bot-msg'));
+    }
+    function addMsg(html, type) {
+        const div = document.createElement('div');
+        div.className = `message ${type}`;
+        div.innerHTML = html;
+        const body = document.getElementById("chatBody");
+        body.appendChild(div);
+        body.scrollTop = body.scrollHeight;
+    }
+
+    // --- 5. SCANNING LOGIC (OCR) ---
+    function uploadScan() {
+        const input = document.getElementById('scanInput');
+        const formData = new FormData();
+        formData.append('receipt_image', input.files[0]);
+        alert("Scanning... Please wait 2-3 seconds.");
+        
+        fetch('/scan_receipt', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if(data.error) alert("Error: " + data.error);
+            else {
+                document.getElementById('resDate').innerText = data.date;
+                document.getElementById('resAmount').innerText = data.amount;
+                document.getElementById('resText').innerText = data.text;
+                document.getElementById('scanResultModal').style.display = 'block';
+            }
+        });
+    }
+
+    // --- 6. SAVE TO DATABASE (THE NEW API CONNECTION) ---
+    function saveToDatabase() {
+        const date = document.getElementById('resDate').innerText;
+        const amount = document.getElementById('resAmount').innerText;
+        const text = document.getElementById('resText').innerText;
+
+        alert("Saving to Database... 💾");
+
+        fetch('/save_scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date: date, amount: amount, text: text })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ Success! Transaction saved.");
+                location.reload(); 
+            } else {
+                alert("❌ Database Error: " + data.error);
+            }
+        });
+    }
+</script>
+
+<div id="scanResultModal" style="display:none; position: fixed; top: 20%; left: 30%; width: 40%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 50px rgba(0,0,0,0.5); z-index: 9999;">
+    <h3>🧾 Scan Results</h3>
+    <p><b>Date:</b> <span id="resDate"></span></p>
+    <p><b>Total:</b> RM <span id="resAmount"></span></p>
+    <p><b>Raw Text:</b> <small id="resText" style="color:gray;"></small></p>
+    <hr>
+    <button class="btn btn-success" onclick="saveToDatabase()">Yes, Add it</button>
+    <button class="btn btn-danger" onclick="document.getElementById('scanResultModal').style.display='none'">Cancel</button>
+</div>
+</body>
+</html>

@@ -1,0 +1,9 @@
+Flask
+psycopg2-binary
+werkzeug
+flask-login
+pandas
+pdfplumber
+pytesseract
+Pillow
+gunicorn
