@@ -369,36 +369,60 @@ def chat():
         if count > 5: resp += f"<i>...and {count - 5} more.</i>"
         return jsonify({"response": resp})
 
-# --- 6. PARSER ---
+# --- 6. PARSER (UPDATED FOR GX BANK) ---
 def parse_universal_statement(filepath):
     extracted_data = []
-    date_pattern = re.compile(r'(?i)(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)|\d{1,2}[/-]\d{2}[/-]\d{4})')
-    amount_pattern = re.compile(r'(\d{1,3}(?:,\d{3})*\.\d{2})')
+    # This matches dates like "1 Nov" or "1 Nov 2025" 
+    date_pattern = re.compile(r'\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)')
 
     with pdfplumber.open(filepath) as pdf:
         for page in pdf.pages:
-            text = page.extract_text()
-            if not text: continue
-            lines = text.split('\n')
-            for line in lines:
-                date_match = date_pattern.search(line)
-                amount_matches = amount_pattern.findall(line)
-                if date_match and amount_matches:
-                    raw_date = date_match.group(0)
-                    amount_str = amount_matches[0].replace(',', '')
-                    try: amount = float(amount_str)
-                    except: continue 
-                    description = line.replace(raw_date, '').replace(amount_matches[0], '').strip()
-                    description = re.sub(r'[^\w\s]', '', description)
-                    category = categorize_description(description)
-                    tax_cat = check_tax_relief(description)
-                    trans_type = "Credit" if category == "Income" else "Debit"
-                    status = "High Spend" if ai_auditor(amount, category) else "Verified"
-                    try: clean_date = datetime.strptime(raw_date.replace('-', '/'), '%d/%m/%Y')
-                    except: 
-                        try: clean_date = datetime.strptime(f"{raw_date} {datetime.now().year}", '%d %b %Y')
-                        except: clean_date = datetime.now()
+            # Extract tables to find columns for "Money in" and "Money out" 
+            tables = page.extract_tables()
+            for table in tables:
+                for row in table:
+                    # Based on your GXBank PDF: row[0]=Date, row[1]=Description, row[2]=Money In, row[3]=Money Out 
                     
+                    # 1. Check if this is a transaction row (must have a valid date)
+                    if not row[0] or not date_pattern.search(row[0]):
+                        continue
+                    
+                    raw_date = date_pattern.search(row[0]).group(0)
+                    description = row[1].replace('\n', ' ').strip() if row[1] else "No Description"
+                    
+                    # 2. Handle Money In vs Money Out columns separately
+                    money_in_raw = row[2] if len(row) > 2 else None
+                    money_out_raw = row[3] if len(row) > 3 else None
+                    
+                    amount = 0.0
+                    trans_type = "Debit" # Default to expense
+
+                    # Check "Money In" column (Credits)
+                    if money_in_raw and any(char.isdigit() for char in money_in_raw):
+                        clean_val = money_in_raw.replace('+', '').replace('RM', '').replace(',', '').strip()
+                        amount = float(clean_val)
+                        trans_type = "Credit"
+                    
+                    # Check "Money Out" column (Debits)
+                    elif money_out_raw and any(char.isdigit() for char in money_out_raw):
+                        clean_val = money_out_raw.replace('-', '').replace('RM', '').replace(',', '').strip()
+                        amount = float(clean_val)
+                        trans_type = "Debit"
+
+                    # 3. Use your existing categorization logic
+                    category = categorize_description(description)
+                    if trans_type == "Credit":
+                        category = "Income" # Ensure "Money In" is always categorized as Income
+                    
+                    tax_cat = check_tax_relief(description)
+                    status = "High Spend" if ai_auditor(amount, category) else "Verified"
+
+                    # 4. Clean up the date for the database
+                    try:
+                        clean_date = datetime.strptime(f"{raw_date} {datetime.now().year}", '%d %b %Y')
+                    except:
+                        clean_date = datetime.now()
+
                     extracted_data.append({
                         'id': datetime.now().strftime('%Y%m%d%H%M%S') + str(len(extracted_data)),
                         'date': clean_date.strftime('%Y-%m-%d'),
