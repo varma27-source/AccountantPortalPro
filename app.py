@@ -435,16 +435,18 @@ def parse_universal_statement(filepath):
                     })
     return extracted_data
 
-# --- 6. PARSER (ULTRA-FAST & LOW MEMORY) ---
+# --- 6. PARSER (HIGH-VOLUME & LONG TIMEOUT VERSION) ---
+import uuid
+
 def parse_universal_statement(filepath):
     extracted_data = []
-    # Simplified patterns to be fast
+    # Fast regex for GXBank dates
     date_pattern = re.compile(r'(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))')
     
     with pdfplumber.open(filepath) as pdf:
         for page in pdf.pages:
-            # We use high-speed text extraction
-            text = page.extract_text(layout=False) 
+            # layout=False is much faster and uses less RAM
+            text = page.extract_text(layout=False)
             if not text:
                 page.flush_cache()
                 continue
@@ -454,7 +456,7 @@ def parse_universal_statement(filepath):
                 if date_match:
                     raw_date = date_match.group(0)
                     
-                    # Look for money values specifically with + or -
+                    # Optimized Money In/Out detection
                     plus_match = re.search(r'\+\s*(\d{1,3}(?:,\d{3})*\.\d{2})', line)
                     minus_match = re.search(r'-\s*(\d{1,3}(?:,\d{3})*\.\d{2})', line)
                     
@@ -469,9 +471,9 @@ def parse_universal_statement(filepath):
                         trans_type = "Debit"
 
                     if amount > 0:
-                        # Create a unique ID that is safe for BIGINT
-                        # Using timestamp + counter
-                        unique_id = int(datetime.now().strftime('%m%d%H%M%S')) + len(extracted_data)
+                        # Generate a truly unique ID using UUID converted to a large integer
+                        # This avoids duplicates during fast processing
+                        unique_id = uuid.uuid4().int >> 96 
                         
                         description = line.replace(raw_date, '').strip()
                         description = re.sub(r'[RM\+\-\d\.,]', '', description).strip()[:50]
@@ -497,7 +499,7 @@ def parse_universal_statement(filepath):
                             'tax_category': tax_cat,
                             'status': status
                         })
-            # Clear RAM immediately after each page
+            # Clear memory per page
             page.flush_cache()
             
     return extracted_data
