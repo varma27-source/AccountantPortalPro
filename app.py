@@ -435,50 +435,46 @@ def parse_universal_statement(filepath):
                     })
     return extracted_data
 
-# --- 6. PARSER (ULTRA-LIGHTWEIGHT STREAMING VERSION) ---
+# --- 6. PARSER (ULTRA-FAST & LOW MEMORY) ---
 def parse_universal_statement(filepath):
     extracted_data = []
-    # Matches dates like "1 Nov" or "1 Nov 2025"
+    # Simplified patterns to be fast
     date_pattern = re.compile(r'(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))')
     
     with pdfplumber.open(filepath) as pdf:
         for page in pdf.pages:
-            # We use extract_text instead of extract_tables to save memory
-            text = page.extract_text()
+            # We use high-speed text extraction
+            text = page.extract_text(layout=False) 
             if not text:
                 page.flush_cache()
                 continue
             
-            lines = text.split('\n')
-            for line in lines:
+            for line in text.split('\n'):
                 date_match = date_pattern.search(line)
                 if date_match:
                     raw_date = date_match.group(0)
                     
-                    # Logic specifically for GXBank's text layout
+                    # Look for money values specifically with + or -
+                    plus_match = re.search(r'\+\s*(\d{1,3}(?:,\d{3})*\.\d{2})', line)
+                    minus_match = re.search(r'-\s*(\d{1,3}(?:,\d{3})*\.\d{2})', line)
+                    
                     amount = 0.0
                     trans_type = "Debit"
                     
-                    # Look for Money In (+) 
-                    if '+' in line:
-                        plus_match = re.search(r'\+\s*(\d{1,3}(?:,\d{3})*\.\d{2})', line)
-                        if plus_match:
-                            amount = float(plus_match.group(1).replace(',', ''))
-                            trans_type = "Credit"
-                    
-                    # Look for Money Out (-)
-                    elif '-' in line:
-                        minus_match = re.search(r'-\s*(\d{1,3}(?:,\d{3})*\.\d{2})', line)
-                        if minus_match:
-                            amount = float(minus_match.group(1).replace(',', ''))
-                            trans_type = "Debit"
+                    if plus_match:
+                        amount = float(plus_match.group(1).replace(',', ''))
+                        trans_type = "Credit"
+                    elif minus_match:
+                        amount = float(minus_match.group(1).replace(',', ''))
+                        trans_type = "Debit"
 
                     if amount > 0:
-                        # Clean up the description
+                        # Create a unique ID that is safe for BIGINT
+                        # Using timestamp + counter
+                        unique_id = int(datetime.now().strftime('%m%d%H%M%S')) + len(extracted_data)
+                        
                         description = line.replace(raw_date, '').strip()
-                        # Remove symbols like RM, +, - to get a clean name
-                        description = re.sub(r'[RM\+\-\d\.,]', '', description).strip()
-                        description = description[:50] # Keep it short
+                        description = re.sub(r'[RM\+\-\d\.,]', '', description).strip()[:50]
 
                         category = categorize_description(description)
                         if trans_type == "Credit": category = "Income"
@@ -492,7 +488,7 @@ def parse_universal_statement(filepath):
                             clean_date = datetime.now()
 
                         extracted_data.append({
-                            'id': datetime.now().strftime('%Y%m%d%H%M%S') + str(len(extracted_data)),
+                            'id': unique_id,
                             'date': clean_date.strftime('%Y-%m-%d'),
                             'description': description if description else "Transaction",
                             'amount': amount,
@@ -501,8 +497,7 @@ def parse_universal_statement(filepath):
                             'tax_category': tax_cat,
                             'status': status
                         })
-            
-            # Immediately clear memory for this page
+            # Clear RAM immediately after each page
             page.flush_cache()
             
     return extracted_data
