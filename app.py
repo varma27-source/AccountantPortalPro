@@ -433,6 +433,88 @@ def parse_universal_statement(filepath):
                         'tax_category': tax_cat,
                         'status': status
                     })
+    return extracted_data# --- 6. PARSER (MEMORY OPTIMIZED FOR LARGE STATEMENTS) ---
+def parse_universal_statement(filepath):
+    extracted_data = []
+    # This matches dates like "1 Nov" or "1 Nov 2025" 
+    date_pattern = re.compile(r'\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)')
+
+    with pdfplumber.open(filepath) as pdf:
+        # Process one page at a time to stay within Render's RAM limits
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            
+            if not tables:
+                page.flush_cache() # Clear RAM for this page
+                continue
+                
+            for table in tables:
+                for row in table:
+                    # Validate row structure (GXBank: 0=Date, 1=Desc, 2=In, 3=Out)
+                    if not row or len(row) < 4 or not row[0]:
+                        continue
+                    
+                    # Search for date in first column
+                    date_text = str(row[0])
+                    date_match = date_pattern.search(date_text)
+                    if not date_match:
+                        continue
+                    
+                    raw_date = date_match.group(0)
+                    description = str(row[1]).replace('\n', ' ').strip() if row[1] else "No Description"
+                    
+                    # Handle Money In vs Money Out columns
+                    money_in_raw = str(row[2]) if row[2] else ""
+                    money_out_raw = str(row[3]) if row[3] else ""
+                    
+                    amount = 0.0
+                    trans_type = "Debit" # Default
+
+                    # 1. Logic for Money In (Credits/Income)
+                    # We check for '+' or if the In column has data while Out is empty
+                    if '+' in money_in_raw or (money_in_raw.strip() and not money_out_raw.strip()):
+                        try:
+                            clean_val = money_in_raw.replace('+', '').replace('RM', '').replace(',', '').strip()
+                            amount = float(clean_val)
+                            trans_type = "Credit"
+                        except: continue
+                    
+                    # 2. Logic for Money Out (Debits/Expenses)
+                    elif '-' in money_out_raw or money_out_raw.strip():
+                        try:
+                            clean_val = money_out_raw.replace('-', '').replace('RM', '').replace(',', '').strip()
+                            amount = float(clean_val)
+                            trans_type = "Debit"
+                        except: continue
+
+                    # 3. Categorization
+                    category = categorize_description(description)
+                    if trans_type == "Credit":
+                        category = "Income" # Force all Money In to Income category
+                    
+                    tax_cat = check_tax_relief(description)
+                    status = "High Spend" if ai_auditor(amount, category) else "Verified"
+
+                    # 4. Clean Date
+                    try:
+                        clean_date = datetime.strptime(f"{raw_date} {datetime.now().year}", '%d %b %Y')
+                    except:
+                        clean_date = datetime.now()
+
+                    extracted_data.append({
+                        'id': datetime.now().strftime('%Y%m%d%H%M%S') + str(len(extracted_data)),
+                        'date': clean_date.strftime('%Y-%m-%d'),
+                        'description': description,
+                        'amount': amount,
+                        'type': trans_type,
+                        'category': category,
+                        'tax_category': tax_cat,
+                        'status': status
+                    })
+            
+            # CRITICAL: Clear the page cache to free up RAM immediately
+            page.flush_cache()
+            
     return extracted_data
 
 @app.route('/scan_receipt', methods=['POST'])
